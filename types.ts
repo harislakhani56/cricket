@@ -19,6 +19,7 @@ export interface RegistrationData {
   viceCaptainName: string;
   players: Player[];
   agreedToTerms: boolean;
+  paymentStatus: 'pending' | 'paid' | 'rejected';
 }
 
 export interface Message {
