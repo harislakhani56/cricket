@@ -1,5 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { collection, addDoc, getDocs } from "firebase/firestore";
+import { db } from "./firebase";
 import { 
   Trophy, 
   Users, 
@@ -101,7 +103,7 @@ const App: React.FC = () => {
   const [viewingReg, setViewingReg] = useState<RegistrationData | null>(null);
   const [logoError, setLogoError] = useState(false);
 
-  const initialPlayers: Player[] = Array.from({ length: 11 }, (_, i) => ({ 
+  const initialPlayers: Player[] = Array.from({ length: 12 }, (_, i) => ({ 
     id: i + 1, 
     name: '', 
     age: '', 
@@ -119,25 +121,29 @@ const App: React.FC = () => {
     agreedToTerms: false
   });
 
-  useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        setRegistrations(JSON.parse(saved));
-      } catch (e) {
-        console.error("Failed to load registrations", e);
-      }
-    }
+useEffect(() => {
+  const fetchData = async () => {
+    try {
+      const snapshot = await getDocs(collection(db, "registrations"));
+      const data = snapshot.docs.map(doc => ({
+        ...doc.data()
+      })) as RegistrationData[];
 
-    const savedRestrictions = localStorage.getItem(RESTRICTIONS_KEY);
-    if (savedRestrictions !== null) {
-      setRestrictionsEnabled(savedRestrictions === 'true');
-    }
-  }, []);
+      setRegistrations(data);
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(registrations));
-  }, [registrations]);
+    } catch (error) {
+      console.error("Error loading data:", error);
+    }
+  };
+
+  fetchData();
+
+  const savedRestrictions = localStorage.getItem(RESTRICTIONS_KEY);
+  if (savedRestrictions !== null) {
+    setRestrictionsEnabled(savedRestrictions === 'true');
+  }
+
+}, []);
 
   useEffect(() => {
     localStorage.setItem(RESTRICTIONS_KEY, String(restrictionsEnabled));
@@ -213,31 +219,31 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!validateSquad()) return;
-    if (editingRegId) {
-      const updatedData: RegistrationData = { 
-        ...formData, 
-        regId: editingRegId, 
-        timestamp: new Date().toISOString() 
-      };
-      setRegistrations(prev => prev.map(reg => 
-        reg.regId === editingRegId ? updatedData : reg
-      ));
-      setLastSubmittedData(updatedData);
-      setStep('success');
-    } else {
-      const newReg: RegistrationData = {
-        ...formData,
-        regId: `LW-${Math.floor(Math.random() * 90000) + 10000}`,
-        timestamp: new Date().toISOString()
-      };
-      setRegistrations(prev => [newReg, ...prev]);
-      setLastSubmittedData(newReg);
-      setStep('success');
-    }
-  };
+  const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!validateSquad()) return;
+
+  try {
+    const newReg: RegistrationData = {
+      ...formData,
+      regId: `LW-${Math.floor(Math.random() * 90000) + 10000}`,
+      timestamp: new Date().toISOString()
+    };
+
+    console.log("Submitting to Firebase:", newReg);
+    const docRef = await addDoc(collection(db, "registrations"), newReg);
+    console.log("Saved successfully");
+
+    setRegistrations(prev => [...prev, newReg]);  // 🔥 IMPORTANT
+
+    setLastSubmittedData(newReg);
+    setStep('success');
+
+  } catch (error) {
+    console.error("Save error:", error);
+    alert("Failed to save data");
+  }
+};
 
   const handleAdminLogin = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -298,7 +304,7 @@ const App: React.FC = () => {
       for (let i = 1; i < lines.length; i++) {
         const row = lines[i].split(',');
         if (row.length < 4 || !row[0].trim()) continue;
-        const players: Player[] = Array.from({ length: 11 }, (_, idx) => {
+        const players: Player[] = Array.from({ length: 12 }, (_, idx) => {
           const baseOffset = 4 + (idx * 3);
           return {
             id: idx + 1,
@@ -321,7 +327,6 @@ const App: React.FC = () => {
         });
       }
       if (newEntries.length > 0) {
-        setRegistrations(prev => [...newEntries, ...prev]);
         alert(`${newEntries.length} teams imported successfully!`);
       }
     };
